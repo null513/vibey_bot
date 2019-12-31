@@ -1,0 +1,9 @@
+.env
+node_modules
+config
+ideas.md
+todos.md
+twitch.rest
+Dockerfile
+*.swp
+.DS_Store

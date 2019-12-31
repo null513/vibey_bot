@@ -1,0 +1,14 @@
+{
+  "name": "vibey_bot",
+  "version": "2.0.0",
+  "description": "Vibey Bot is the Chillest Bot out there",
+  "main": "index.js",
+  "repository": "https://github.com/opti21/vibey_bot.git",
+  "author": "opti21 <browe.media@gmail.com>",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

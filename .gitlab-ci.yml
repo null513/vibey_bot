@@ -1,8 +1,6 @@
 image: node:latest
 stages:
   - build
-  - test
-  - production
 
 cache:
   paths:
@@ -11,31 +9,10 @@ cache:
 install_depencies:
   stage: build
   script:
-    - npm install
+    - yarn install
   artifacts:
     paths:
       - node_modules/
 
-is_this_working:
-  stage: test
-  script: npm test
-
-production:
-  type: deploy
-  stage: production
-  image: ubuntu:latest
-  environment:
-    name: deployment
-    url: vibeybot.xyz
-  script:
-    - apt-get update -qq
-    - apt-get install -qq git
-    # Setup SSH deploy keys
-    - 'which ssh-agent || ( apt-get install -qq openssh-client )'
-    - eval $(ssh-agent -s)
-    - ssh-add <(echo "$SSH_PRIVATE_KEY" | base64 -d)
-    - mkdir -p ~/.ssh
-    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
-    - ssh vibey_bot@209.141.36.245 "cd /var/www/vibey_bot/code/vibey_bot && git checkout master && git pull origin master && pm2 restart 0 && exit"
   only:
-    - master
+    - v2
