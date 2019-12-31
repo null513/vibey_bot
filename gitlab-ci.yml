@@ -1,0 +1,18 @@
+image: node:latest
+stages:
+  - build
+
+cache:
+  paths:
+    - node_modules/
+
+install_depencies:
+  stage: build
+  script:
+    - yarn install
+  artifacts:
+    paths:
+      - node_modules/
+
+  only:
+    - v2
