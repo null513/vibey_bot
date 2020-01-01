@@ -6,7 +6,7 @@ cache:
   paths:
     - node_modules/
 
-install_depencies:
+install_dependencies:
   stage: build
   script:
     - yarn install

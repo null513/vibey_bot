@@ -82,12 +82,12 @@ function errTxt(err) {
 const rqs = io.of('/req-namescape');
 const polls = io.of('/polls-namescape');
 
-rqs.on('connection', function(socket) {
+rqs.on('connection', function (socket) {
   console.log('Connected to requests');
   socket.emit('socketConnect', {});
 
   //Whenever someone disconnects this piece of code executed
-  rqs.on('disconnect', function() {
+  rqs.on('disconnect', function () {
     console.log('User disconnected from requests');
   });
 });
@@ -131,7 +131,7 @@ switch (process.env.NODE_ENV) {
           useCreateIndex: true
         }
       )
-      .catch(function(err) {
+      .catch(function (err) {
         // TODO: Throw error page if DB doesn't connect
         console.error(
           'Unable to connect to the mongodb instance. Error: ',
@@ -148,7 +148,7 @@ switch (process.env.NODE_ENV) {
         useUnifiedTopology: true,
         useCreateIndex: true
       })
-      .catch(function(err) {
+      .catch(function (err) {
         // TODO: Throw error page if DB doesn't connect
         console.error(
           'Unable to connect to the mongodb instance. Error: ',
@@ -182,11 +182,11 @@ passport.use(
       callbackURL: `${process.env.APP_URL}/auth/twitch/callback`,
       scope: 'user:read:email'
     },
-    async function(accessToken, refreshToken, profile, done) {
+    async function (accessToken, refreshToken, profile, done) {
       try {
         User.findOne({ twitch_id: profile.id })
           .exec()
-          .then(function(UserSearch) {
+          .then(function (UserSearch) {
             if (UserSearch === null) {
               let user = new User({
                 twitch_id: profile.id,
@@ -219,11 +219,11 @@ passport.use(
   )
 );
 
-passport.serializeUser(function(user, done) {
+passport.serializeUser(function (user, done) {
   done(null, user);
 });
 
-passport.deserializeUser(function(obj, done) {
+passport.deserializeUser(function (obj, done) {
   done(null, obj);
 });
 
@@ -231,9 +231,8 @@ app.get('/auth/twitch', passport.authenticate('twitch'));
 app.get(
   '/auth/twitch/callback',
   passport.authenticate('twitch', { failureRedirect: '/login' }),
-  function(req, res) {
+  function (req, res) {
     // Successful authentication, redirect home.
-    // res.redirect("/requests");
     res.redirect('/requests');
   }
 );
@@ -249,7 +248,7 @@ app.get('/login', (req, res) => {
 });
 
 // Logout
-app.get('/logout', async function(req, res) {
+app.get('/logout', async function (req, res) {
   try {
     await User.deleteOne({ twitch_id: req.user.id });
     req.session = null;
@@ -271,7 +270,7 @@ function loggedIn(req, res, next) {
   }
 }
 
-app.get('/test', function(req, res) {
+app.get('/test', function (req, res) {
   console.log('REQ.SESSION:');
   console.log(req.user);
   res.send(req.user);
@@ -662,7 +661,7 @@ botclient.on('connected', (address, port) => {
   if (process.env.NODE_ENV === 'development') {
     var cmd = `osascript -e 'display notification "${address} on port ${port}" with title "Connected to Twitch!" sound name "Submarine"'`;
 
-    exec(cmd, function(error, stdout, stderr) {
+    exec(cmd, function (error, stdout, stderr) {
       // command output is in stdout
       if (error) {
         console.error(error);
@@ -689,7 +688,7 @@ botclient.on('chat', async (channel, userstate, message, self) => {
         var spURI = spotifyUri.formatURI(message[1]);
         spotify
           .request(`https://api.spotify.com/v1/tracks/${spID.id}`)
-          .then(function(data) {
+          .then(function (data) {
             var newSpotSR = new SongRequest({
               track: {
                 name: data.name,
@@ -727,7 +726,7 @@ botclient.on('chat', async (channel, userstate, message, self) => {
                 errTxt(err);
               });
           })
-          .catch(function(err) {
+          .catch(function (err) {
             console.error('Error occurred: ' + err);
             errTxt(err);
           });
@@ -781,7 +780,7 @@ botclient.on('chat', async (channel, userstate, message, self) => {
         var ytSearch = `https://www.youtube.com/results?search_query=${ytQuery}`;
         spotify.search(
           { type: 'track', query: `${request}`, limit: 1 },
-          function(err, data) {
+          function (err, data) {
             if (data === null) {
               youtube
                 .search(request, 1)
