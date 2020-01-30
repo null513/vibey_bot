@@ -13,8 +13,19 @@ body {
 .youtube {
 	color: #fc0800
 }
+.music-icon {
+  width: 25px !important;
+  height: 50px !important;
+}
 .srLink {
-	color: #ffffff;
+  font-size: large;
+  color: #f0e3ff;
+  font-family: 'Days One', sans-serif;
+}
+.card {
+  background-color: #3e206d !important;
+  box-sizing : content-box;
+
 }
 .mix-add {
 	margin-bottom: 5px;

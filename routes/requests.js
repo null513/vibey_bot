@@ -8,7 +8,6 @@ const admins = config.admins;
 const version = require('project-version');
 const rqs = io.of('/req-namescape');
 
-
 function loggedIn(req, res, next) {
     if (!req.user) {
         res.redirect('/login');
@@ -23,7 +22,6 @@ router.get('/', loggedIn, async (req, res) => {
         if (user === null) {
             res.redirect('/login');
         }
-        console.log(user.username);
         var feSongRequests = await SongRequest.find();
         var mixRequests = await mixReqs.find();
         if (admins.includes(user.username)) {

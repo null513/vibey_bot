@@ -28,7 +28,7 @@ const admins = config.admins;
 const exec = require('child_process').exec;
 const he = require('he');
 const sgMail = require('@sendgrid/mail');
-const fs = require('fs');
+const updateChoice = require('./utils/updateChoice')
 
 // SendGrid Emails
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -69,6 +69,7 @@ async function getTwitchCreds() {
   }
 }
 
+
 // Error texts
 function errTxt(err) {
   var msg = {
@@ -89,7 +90,7 @@ function errTxt(err) {
 // Real time data
 const rqs = io.of('/req-namescape');
 const polls = io.of('/polls-namescape');
-const hellos = io.of('/hellos-namescape')
+const hellos = io.of('/hellos-namescape');
 
 rqs.on('connection', function (socket) {
   console.log('Connected to requests');
@@ -111,7 +112,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(
   cookieSession({
-    name: 'session',
+    name: 'vibey_session',
     secret: `${process.env.SESSION_SECRET}`,
     saveUninitialized: false,
     resave: false
@@ -137,7 +138,7 @@ app.use('/widget', widgetRoute);
 app.use('/api', apiRoute);
 app.use('/settings', settingsRoute);
 
-// Databae
+// Mongo Databae
 const mongoose = require('mongoose');
 
 switch (process.env.NODE_ENV) {
@@ -206,7 +207,39 @@ db.on('error', error => {
 });
 db.once('open', () => console.log('Connected to Mongoose ' + Date()));
 
-//Models
+// Redis Databae
+const redis = require('./utils/redis-export')
+
+redis.on("ready", () => {
+  console.log('Redis Ready')
+})
+
+redis.on("connect", () => {
+  console.log('Redis is connected')
+})
+
+redis.on("error", (err) => {
+  console.error(err)
+})
+
+// Create hash for each chat channel
+config.twitchChan.forEach((channel) => {
+  let doesExist
+  redis.hexists(`Channel:#${channel}`, 'username', (err, reply) => {
+    if (err) {
+      console.error(err)
+      return
+    }
+    console.log(reply)
+    if (reply === 0) {
+      redis.hset(`Channel:#${channel}`, 'username', `${channel}`)
+      console.log('Channel created on redis')
+    }
+  })
+})
+
+
+// MongoDB Models
 const User = require('./models/users');
 const SongRequest = require('./models/songRequests');
 const Poll = require('./models/polls');
@@ -541,65 +574,130 @@ botclient.on('chat', async (channel, userstate, message, self) => {
   let numRegex = /^[0-9]+$/;
   // Check to see if message is only numbers
   if (numRegex.test(message) == true) {
-    var poll = await Poll.findOne({ active: true });
-    if (!poll) {
-      // if no poll say nothing because bot will spam
-      return;
-    }
-    // Check if the user has already voted
-    if (poll.voters.includes(userstate.username)) {
-      // Check if multiple votes are allowed
-      if (poll.allow_multiple_votes == true) {
-        var numIndex = message.search(/\d/)
-        var int = message[numIndex]
-        var choice = parseInt(int, 10);
-        var cIndex = choice - 1;
-        var cID = poll.choices[cIndex].id;
-        var currV = poll.choices[cIndex].votes;
-        var i = currV + 1;
-        var tUser = userstate.username;
-
-        await Poll.findOneAndUpdate(
-          { _id: poll.id, 'choices.id': cID },
-          { $addToSet: { voters: tUser }, $set: { 'choices.$.votes': i } },
-          { useFindAndModify: false, new: true },
-          (err, doc) => {
-            // console.log(doc.choices[cIndex].votes);
-            // console.log(doc);
-            polls.emit('pollUpdate', {
-              doc: doc
-            });
-          }
-        );
-      } else {
-        botclient.say(
-          channel,
-          `@${userstate.username} you've already voted`
-        );
+    // Check to see if poll already exists
+    // var poll = await Poll.findOne({ active: true });
+    let poll;
+    redis.hexists(`Channel:${channel}`, 'activePoll', (err, reply) => {
+      if (err) {
+        console.error(err)
         return
       }
-    } else {
-      var numIndex = message.search(/\d/)
-      var int = message[numIndex]
-      var choice = parseInt(int, 10);
-      var cIndex = choice - 1;
-      var cID = poll.choices[cIndex].id;
-      var currV = poll.choices[cIndex].votes;
-      var i = currV + 1;
-      var tUser = userstate.username;
-      await Poll.findOneAndUpdate(
-        { _id: poll.id, 'choices.id': cID },
-        { $addToSet: { voters: tUser }, $set: { 'choices.$.votes': i } },
-        { useFindAndModify: false, new: true },
-        (err, doc) => {
-          // console.log(doc.choices[cIndex].votes);
-          // console.log(doc);
-          polls.emit('pollUpdate', {
-            doc: doc
-          });
-        }
-      );
+      console.log('poll exists? ', reply)
+      poll = reply
+    });
+
+    if (poll === 0) {
+      // if no poll say nothing because bot will spam
+      console.log('NO POLL')
+      return;
     }
+
+    // Check if the user has already voted
+    // Get active poll ID
+    redis.hget(
+      `Channel:${channel}`,
+      'activePoll',
+      (err, pollID) => {
+        if (err) {
+          console.error(err)
+          return
+        }
+        redis.sismember(
+          // See if they have voted before
+          `Channel:${channel}:Poll:${pollID}:Voters`,
+          `${userstate.username}`,
+          (err, votedBefore) => {
+            if (err) {
+              console.error(err)
+              return
+            }
+            // Check to see if multiple votes are allowed
+            redis.lindex(
+              `Channel:${channel}:Poll:${pollID}`,
+              3,
+              (err, multipleVotes) => {
+                if (err) {
+                  console.error(err)
+                  return
+                }
+                if (multipleVotes === "true") {
+                  // If multiple votes are allowed just keep adding to list
+                  updateChoice(message, channel, pollID, userstate)
+                } else {
+                  // If multiple votes are not allowed then check to see if
+                  // they have voted before
+                  if (votedBefore === 0) {
+                    // They haven't voted before
+                    updateChoice(message, channel, pollID, userstate)
+                  } else {
+                    botclient.say(channel, `@${userstate.username} you have already voted`)
+                    return
+                  }
+                }
+              })
+
+          }
+        )
+      }
+    )
+
+
+
+
+
+    // Check if the user has already voted
+    // if (poll.voters.includes(userstate.username)) {
+    //   // Check if multiple votes are allowed
+    //   if (poll.allow_multiple_votes == true) {
+    //     var numIndex = message.search(/\d/)
+    //     var int = message[numIndex]
+    //     var choice = parseInt(int, 10);
+    //     var cIndex = choice - 1;
+    //     var cID = poll.choices[cIndex].id;
+    //     var currV = poll.choices[cIndex].votes;
+    //     var i = currV + 1;
+    //     var tUser = userstate.username;
+    //     await Poll.findOneAndUpdate(
+    //       { _id: poll.id, 'choices.id': cID },
+    //       { $addToSet: { voters: tUser }, $set: { 'choices.$.votes': i } },
+    //       { useFindAndModify: false, new: true },
+    //       (err, doc) => {
+    //         // console.log(doc.choices[cIndex].votes);
+    //         // console.log(doc);
+    //         polls.emit('pollUpdate', {
+    //           doc: doc
+    //         });
+    //       }
+    //     );
+    //   } else {
+    //     botclient.say(
+    //       channel,
+    //       `@${userstate.username} you've already voted`
+    //     );
+    //     return
+    //   }
+    // } else {
+    //   var numIndex = message.search(/\d/)
+    //   var int = message[numIndex]
+    //   var choice = parseInt(int, 10);
+    //   var cIndex = choice - 1;
+    //   var cID = poll.choices[cIndex].id;
+    //   var currV = poll.choices[cIndex].votes;
+    //   var i = currV + 1;
+    //   var tUser = userstate.username;
+    //   await Poll.findOneAndUpdate(
+    //     { _id: poll.id, 'choices.id': cID },
+    //     { $addToSet: { voters: tUser }, $set: { 'choices.$.votes': i } },
+    //     { useFindAndModify: false, new: true },
+    //     (err, doc) => {
+    //       // console.log(doc.choices[cIndex].votes);
+    //       // console.log(doc);
+    //       polls.emit('pollUpdate', {
+    //         doc: doc
+    //       });
+    //     }
+    //   );
+    // }
   }
 
   if (parsedM[0] === '!deleteall') {
@@ -867,3 +965,4 @@ function makeid(length) {
   }
   return result;
 }
+
